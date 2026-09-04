@@ -46,7 +46,6 @@ def _draw_frame(lines: list[str], chars_shown: int, font: ImageFont.FreeTypeFont
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    # sarlavha
     draw.text((PADDING, 30), title, font=font, fill=ACCENT_COLOR)
 
     y = 100
@@ -56,7 +55,7 @@ def _draw_frame(lines: list[str], chars_shown: int, font: ImageFont.FreeTypeFont
             visible = ""
         elif remaining >= len(line):
             visible = line
-            remaining -= len(line) + 1  # +1 yangi qator uchun
+            remaining -= len(line) + 1
         else:
             visible = line[:remaining]
             remaining = 0
@@ -78,7 +77,6 @@ def generate_code_video(code: str, title: str, output_path: str) -> bool:
     try:
         font_path = _find_monospace_font()
         font = ImageFont.truetype(font_path, FONT_SIZE)
-        title_font = ImageFont.truetype(font_path, FONT_SIZE + 4)
     except Exception:
         return False
 
@@ -97,7 +95,6 @@ def generate_code_video(code: str, title: str, output_path: str) -> bool:
             frame = _draw_frame(lines, chars_shown, font, title)
             frame.save(os.path.join(tmpdir, f"frame_{i:05d}.png"))
 
-        # oxirgi kadrni bir necha marta takrorlaymiz, tugagach 1 soniya "to'xtab tursin"
         hold_frames = FPS
         last_frame = _draw_frame(lines, total_chars, font, title)
         for j in range(hold_frames):
