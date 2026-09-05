@@ -6,11 +6,7 @@ from datetime import time as dtime, timezone
 
 from dotenv import load_dotenv
 
-load_dotenv()  # shu papkadagi .env faylini o'qib, muhit o'zgaruvchilariga yuklaydi.
-# MUHIM: bu quyidagi `from content import ...` va boshqa lokal modul
-# importlaridan OLDIN chaqirilishi shart - aks holda content.py, images.py
-# kabi modullar import qilinganda GEMINI_API_KEY hali .env'dan o'qilmagan
-# bo'ladi (ular modul darajasida os.environ.get(...) chaqiradi).
+load_dotenv()
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
