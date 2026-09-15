@@ -41,11 +41,9 @@ except KeyError as e:
 
 db.init_db()
 
-CAPTION_LIMIT = 1024  # Telegram rasm/video captioni uchun limit
+CAPTION_LIMIT = 1024
 
-# /addchannel suhbat bosqichlari
 ASK_CHANNEL, ASK_TOPICS, ASK_TIME = range(3)
-
 
 async def resolve_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str | None:
     """Buyruq qaysi kanal uchun ekanini aniqlaydi.
@@ -64,7 +62,6 @@ async def resolve_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if len(channels) == 1:
         return channels[0]["channel_id"]
 
-    # bir nechta kanal - tanlov tugmalari
     keyboard = [
         [InlineKeyboardButton(ch["channel_id"], callback_data=f"selectch:{ch['channel_id']}")]
         for ch in channels
@@ -83,7 +80,6 @@ async def cmd_select_channel_callback(update: Update, context: ContextTypes.DEFA
     channel_id = query.data.split(":", 1)[1]
     context.user_data["selected_channel"] = channel_id
     await query.edit_message_text(f"Tanlandi: {channel_id}\nEndi kerakli buyruqni qayta yuboring.")
-
 
 async def post_now(context: ContextTypes.DEFAULT_TYPE, channel_id: str, topic: str | None = None) -> str:
     """Bitta post generatsiya qilib berilgan kanalga joylaydi. Joylangan mavzuni qaytaradi."""
@@ -133,9 +129,6 @@ async def post_now(context: ContextTypes.DEFAULT_TYPE, channel_id: str, topic: s
 
     return chosen_topic
 
-
-# ---------- /addchannel suhbat oqimi ----------
-
 async def cmd_addchannel_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         await update.message.reply_text("Bu buyruqni bot bilan shaxsiy chatda yuboring.")
@@ -148,7 +141,6 @@ async def cmd_addchannel_start(update: Update, context: ContextTypes.DEFAULT_TYP
         "Bekor qilish uchun /cancel yozing."
     )
     return ASK_CHANNEL
-
 
 async def addchannel_got_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_id = update.message.text.strip()
@@ -165,7 +157,6 @@ async def addchannel_got_channel(update: Update, context: ContextTypes.DEFAULT_T
         )
         return ConversationHandler.END
 
-    # botning kanalga admin ekanligini tekshiramiz
     try:
         member = await context.bot.get_chat_member(channel_id, context.bot.id)
         if member.status not in ("administrator", "creator"):
@@ -245,9 +236,6 @@ async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Bekor qilindi.")
     return ConversationHandler.END
-
-
-# ---------- Oddiy buyruqlar ----------
 
 async def cmd_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_id = context.user_data.pop("selected_channel", None)
@@ -394,9 +382,6 @@ async def cmd_mychannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"- {ch['channel_id']} (jadval: {sched})")
     await update.message.reply_text("Sizning kanallaringiz:\n" + "\n".join(lines))
 
-
-# ---------- Kunlik avtomatik post - har kanal uchun alohida job ----------
-
 def _job_name(channel_id: str) -> str:
     return f"daily_post:{channel_id}"
 
@@ -411,11 +396,9 @@ def _schedule_channel_job(application, channel_id: str, hour: int, minute: int):
         data={"channel_id": channel_id},
     )
 
-
 def _unschedule_channel_job(application, channel_id: str):
     for job in application.job_queue.get_jobs_by_name(_job_name(channel_id)):
         job.schedule_removal()
-
 
 async def daily_post_callback(context: ContextTypes.DEFAULT_TYPE):
     channel_id = context.job.data["channel_id"]
@@ -425,16 +408,12 @@ async def daily_post_callback(context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         logger.exception(f"Kunlik postda xatolik ({channel_id})")
 
-
 def _restore_all_schedules(application):
     """Bot qayta ishga tushganda, bazadagi barcha jadvallarni JobQueue'ga tiklaydi."""
     channels = db.get_all_scheduled_channels()
     for ch in channels:
         _schedule_channel_job(application, ch["channel_id"], ch["schedule_hour"], ch["schedule_minute"])
     logger.info(f"{len(channels)} ta kanal uchun jadval tiklandi")
-
-
-# ---------- Umumiy buyruqlar ----------
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -449,7 +428,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/addtopic <mavzu> - yangi mavzu qo'shish\n"
         "/addadmin <user_id> - kanalga admin qo'shish"
     )
-
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
@@ -479,7 +457,6 @@ def main():
 
     logger.info("Bot ishga tushdi (polling)")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
-
 
 if __name__ == "__main__":
     main()
