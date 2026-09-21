@@ -2,7 +2,7 @@ import logging
 import os
 import random
 import tempfile
-from datetime import time as dtime, timezone
+from datetime import time as dtime, timezone, timedelta
 
 from dotenv import load_dotenv
 
@@ -43,7 +43,11 @@ db.init_db()
 
 CAPTION_LIMIT = 1024
 
+# O'zbekiston vaqt mintaqasi (UTC+5)
+UZB_TZ = timezone(timedelta(hours=5))
+
 ASK_CHANNEL, ASK_TOPICS, ASK_TIME = range(3)
+
 
 async def resolve_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str | None:
     """Buyruq qaysi kanal uchun ekanini aniqlaydi.
@@ -81,6 +85,7 @@ async def cmd_select_channel_callback(update: Update, context: ContextTypes.DEFA
     context.user_data["selected_channel"] = channel_id
     await query.edit_message_text(f"Tanlandi: {channel_id}\nEndi kerakli buyruqni qayta yuboring.")
 
+
 async def post_now(context: ContextTypes.DEFAULT_TYPE, channel_id: str, topic: str | None = None) -> str:
     """Bitta post generatsiya qilib berilgan kanalga joylaydi. Joylangan mavzuni qaytaradi."""
     if topic:
@@ -99,8 +104,9 @@ async def post_now(context: ContextTypes.DEFAULT_TYPE, channel_id: str, topic: s
     media_type = post["media_type"]
     media_prompt = post["media_prompt"]
 
-    media_path = None
+    # TemporaryDirectory ichida faylni yaratib, shu bloking o'zidayoq Telegram'ga yuboramiz
     with tempfile.TemporaryDirectory() as tmpdir:
+        media_path = None
         if media_type == "video" and media_prompt:
             snippet = get_code_snippet(chosen_topic)
             if snippet:
@@ -113,21 +119,28 @@ async def post_now(context: ContextTypes.DEFAULT_TYPE, channel_id: str, topic: s
         if media_path and len(text) <= CAPTION_LIMIT:
             with open(media_path, "rb") as f:
                 await context.bot.send_video(
-                    chat_id=channel_id, video=f, caption=text,
+                    chat_id=channel_id,
+                    video=f,
+                    caption=text,
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
         elif media_path:
             with open(media_path, "rb") as f:
                 await context.bot.send_video(chat_id=channel_id, video=f)
             await context.bot.send_message(
-                chat_id=channel_id, text=text, parse_mode=ParseMode.MARKDOWN_V2,
+                chat_id=channel_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN_V2,
             )
         else:
             await context.bot.send_message(
-                chat_id=channel_id, text=text, parse_mode=ParseMode.MARKDOWN_V2,
+                chat_id=channel_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN_V2,
             )
 
     return chosen_topic
+
 
 async def cmd_addchannel_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
@@ -141,6 +154,7 @@ async def cmd_addchannel_start(update: Update, context: ContextTypes.DEFAULT_TYP
         "Bekor qilish uchun /cancel yozing."
     )
     return ASK_CHANNEL
+
 
 async def addchannel_got_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_id = update.message.text.strip()
@@ -173,7 +187,7 @@ async def addchannel_got_channel(update: Update, context: ContextTypes.DEFAULT_T
 
     context.user_data["new_channel_id"] = channel_id
     await update.message.reply_text(
-        "Kanal tasdiqlandi \u2705\n\n"
+        "Kanal tasdiqlandi ✅\n\n"
         "2-qadam: Mavzularni yuboring, har birini alohida qatorda "
         "(masalan:\nPython dekoratorlari\nDocker asoslari\nSQL indekslar)"
     )
@@ -187,9 +201,9 @@ async def addchannel_got_topics(update: Update, context: ContextTypes.DEFAULT_TY
         return ASK_TOPICS
     context.user_data["new_channel_topics"] = lines
     await update.message.reply_text(
-        f"{len(lines)} ta mavzu qabul qilindi \u2705\n\n"
+        f"{len(lines)} ta mavzu qabul qilindi ✅\n\n"
         "3-qadam: Kunlik avtomatik post qaysi vaqtda joylansin? "
-        "HH:MM formatida yuboring (UTC bo'yicha, masalan 13:00).\n"
+        "HH:MM formatida yuboring (O'zbekiston vaqti bo'yicha, masalan 18:00).\n"
         "Agar avtomatik post kerak bo'lmasa, /skip yozing."
     )
     return ASK_TIME
@@ -205,7 +219,7 @@ async def addchannel_got_time(update: Update, context: ContextTypes.DEFAULT_TYPE
                 raise ValueError
         except ValueError:
             await update.message.reply_text(
-                "Noto'g'ri format. Masalan: 13:00, yoki /skip yozing."
+                "Noto'g'ri format. Masalan: 18:00, yoki /skip yozing."
             )
             return ASK_TIME
 
@@ -222,7 +236,7 @@ async def addchannel_got_time(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     summary = f"Kanal qo'shildi: {channel_id}\nMavzular: {len(topics)} ta"
     if hour is not None:
-        summary += f"\nAvtomatik post: har kuni {hour:02d}:{minute:02d} (UTC)"
+        summary += f"\nAvtomatik post: har kuni {hour:02d}:{minute:02d} (Toshkent vaqti)"
     else:
         summary += "\nAvtomatik post: o'chirilgan (keyin /schedule bilan yoqishingiz mumkin)"
     await update.message.reply_text(summary)
@@ -236,6 +250,7 @@ async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Bekor qilindi.")
     return ConversationHandler.END
+
 
 async def cmd_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_id = context.user_data.pop("selected_channel", None)
@@ -272,13 +287,13 @@ async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current = next((c for c in channels if c["channel_id"] == channel_id), None)
         if current and current["schedule_hour"] is not None:
             await update.message.reply_text(
-                f"Joriy jadval: har kuni {current['schedule_hour']:02d}:{current['schedule_minute']:02d} (UTC).\n"
+                f"Joriy jadval: har kuni {current['schedule_hour']:02d}:{current['schedule_minute']:02d} (Toshkent vaqti).\n"
                 f"O'chirish uchun: /unschedule"
             )
         else:
             await update.message.reply_text(
                 "Foydalanish: /schedule HH:MM (masalan /schedule 18:00)\n"
-                "Vaqt server vaqti (UTC) bo'yicha."
+                "Vaqt Toshkent vaqti (UTC+5) bo'yicha."
             )
         return
 
@@ -293,7 +308,7 @@ async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.set_schedule(channel_id, hour, minute)
     _schedule_channel_job(context.application, channel_id, hour, minute)
     await update.message.reply_text(
-        f"{channel_id}: har kuni {hour:02d}:{minute:02d} (UTC) da avtomatik post yoqildi."
+        f"{channel_id}: har kuni {hour:02d}:{minute:02d} (Toshkent vaqti) da avtomatik post yoqildi."
     )
 
 
@@ -378,9 +393,10 @@ async def cmd_mychannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     lines = []
     for ch in channels:
-        sched = f"{ch['schedule_hour']:02d}:{ch['schedule_minute']:02d} UTC" if ch["schedule_hour"] is not None else "yoqilmagan"
+        sched = f"{ch['schedule_hour']:02d}:{ch['schedule_minute']:02d} (Toshkent v.)" if ch["schedule_hour"] is not None else "yoqilmagan"
         lines.append(f"- {ch['channel_id']} (jadval: {sched})")
     await update.message.reply_text("Sizning kanallaringiz:\n" + "\n".join(lines))
+
 
 def _job_name(channel_id: str) -> str:
     return f"daily_post:{channel_id}"
@@ -391,14 +407,16 @@ def _schedule_channel_job(application, channel_id: str, hour: int, minute: int):
         job.schedule_removal()
     application.job_queue.run_daily(
         daily_post_callback,
-        time=dtime(hour=hour, minute=minute, tzinfo=timezone.utc),
+        time=dtime(hour=hour, minute=minute, tzinfo=UZB_TZ),
         name=_job_name(channel_id),
         data={"channel_id": channel_id},
     )
 
+
 def _unschedule_channel_job(application, channel_id: str):
     for job in application.job_queue.get_jobs_by_name(_job_name(channel_id)):
         job.schedule_removal()
+
 
 async def daily_post_callback(context: ContextTypes.DEFAULT_TYPE):
     channel_id = context.job.data["channel_id"]
@@ -408,12 +426,14 @@ async def daily_post_callback(context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         logger.exception(f"Kunlik postda xatolik ({channel_id})")
 
+
 def _restore_all_schedules(application):
     """Bot qayta ishga tushganda, bazadagi barcha jadvallarni JobQueue'ga tiklaydi."""
     channels = db.get_all_scheduled_channels()
     for ch in channels:
         _schedule_channel_job(application, ch["channel_id"], ch["schedule_hour"], ch["schedule_minute"])
     logger.info(f"{len(channels)} ta kanal uchun jadval tiklandi")
+
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -422,15 +442,23 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/addchannel - yangi kanal qo'shish (bosqichma-bosqich)\n"
         "/mychannels - kanallaringiz ro'yxati\n"
         "/post [mavzu] - hozir post joylash\n"
-        "/schedule HH:MM - kunlik avtomatik postni yoqish\n"
+        "/schedule HH:MM - kunlik avtomatik postni yoqish (Toshkent vaqti)\n"
         "/unschedule - avtomatik postni o'chirish\n"
         "/topics - mavzular ro'yxati\n"
         "/addtopic <mavzu> - yangi mavzu qo'shish\n"
         "/addadmin <user_id> - kanalga admin qo'shish"
     )
 
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+
+    if app.job_queue is None:
+        logger.error(
+            "JobQueue topilmadi! Iltimos, kutubxonani quyidagicha qayta o'rnating:\n"
+            "pip install \"python-telegram-bot[job-queue]\""
+        )
+        return
 
     addchannel_conv = ConversationHandler(
         entry_points=[CommandHandler("addchannel", cmd_addchannel_start)],
@@ -457,6 +485,7 @@ def main():
 
     logger.info("Bot ishga tushdi (polling)")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
 if __name__ == "__main__":
     main()
